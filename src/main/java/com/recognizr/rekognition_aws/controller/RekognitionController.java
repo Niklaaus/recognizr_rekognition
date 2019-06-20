@@ -1,10 +1,10 @@
 package com.recognizr.rekognition_aws.controller;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,6 +23,8 @@ public class RekognitionController {
 	@Autowired
 	RekognitionService rekogService;
 
+	final String collectionName = "engineer_sahab_faces_collection";
+	
 	@GetMapping(value = "/test", produces = "application/json")
 	public ResponseEntity testingRekognition() {
 		String filepath = "/media/chilgoza/Photos & Videos/Personal Photos n Videos/VaultOfPhotos101/IMG-20150530-WA0003.jpg";
@@ -54,38 +56,58 @@ public class RekognitionController {
 		return new ResponseEntity(HttpStatus.OK);
 	}
 
+	@PostMapping(value = "/delete-collection", produces = "application/json")
+	public ResponseEntity deleteCollection(@RequestBody String collectionName) {
+		try {
+			if (!StringUtils.isEmpty(collectionName)) {
+				rekogService.deleteCollection(collectionName);
+				return new ResponseEntity(HttpStatus.OK);
+			} else {
+				throw new Exception("Controller.deleteCollection ::: collectionName is empty");
+			}
+		} catch (Exception e) {
+			return new ResponseEntity(HttpStatus.BAD_REQUEST);
+		}
+	}
+
 	@PostMapping(value = "/add-face", produces = "application/json")
-	public ResponseEntity addFacesToCollection(@RequestBody String collectionName) { // will add another parameter to
-																						// handle base64 image coming
-																						// from front end
+	public ResponseEntity addFacesToCollection(@RequestBody Map<String, String> params) { 
+		String personName = params.get("personName");
+		String base64InputImage = params.get("base64InputImage");
+
+		if (StringUtils.isEmpty(personName) || StringUtils.isEmpty(base64InputImage)) {
+			System.out.println("addFacesToCollection controller :::: personName=" + personName + " base64InputImage::"
+					+ StringUtils.isEmpty(base64InputImage));
+			return new ResponseEntity(HttpStatus.BAD_REQUEST);
+		}
 
 		if (!rekogService.collectionExists(collectionName)) {
 			System.out.println("collection of this name does not exist");
 			return new ResponseEntity(HttpStatus.BAD_REQUEST);
 		}
+		int startOfBase64Data = base64InputImage.indexOf(",") + 1;
+		base64InputImage = base64InputImage.substring(startOfBase64Data, base64InputImage.length());
+		try {
 
-		// temp code till front end is not created for training
-		String folderPath = "/home/chilgoza/Downloads/" + collectionName;
-		File foldername = new File(folderPath);
-		for (File f : foldername.listFiles()) {
-			Path path = Paths.get(f.getAbsolutePath());
-			try {
-				byte[] bytes = Files.readAllBytes(path);
-				rekogService.addFaceToCollection(collectionName, bytes);
-			} catch (Exception e) {
-				return new ResponseEntity(HttpStatus.BAD_REQUEST);
-			}
-
+			rekogService.addFaceToCollection(collectionName, Base64.getDecoder().decode(base64InputImage.getBytes()),
+					personName);
+		} catch (Exception e) {
+			return new ResponseEntity(HttpStatus.BAD_REQUEST);
 		}
-		// temp code till front end is not created for training ends
 
 		return new ResponseEntity(HttpStatus.OK);
 	}
-	
+
 	@PostMapping(value = "/recognize", produces = "application/json")
 	public ResponseEntity searchFace(@RequestBody String base64InputImage) {
-		
-		return null;
+		if (!StringUtils.isEmpty(base64InputImage)) {
+			int startOfBase64Data = base64InputImage.indexOf(",") + 1;
+			base64InputImage = base64InputImage.substring(startOfBase64Data, base64InputImage.length());
+			Map<String, String> response = rekogService
+					.searchIdentifyFace(collectionName,Base64.getDecoder().decode(base64InputImage.getBytes()));
+			return new ResponseEntity(response,HttpStatus.OK);
+		}
+		return new ResponseEntity(HttpStatus.BAD_REQUEST);
 	}
-	
+
 }
