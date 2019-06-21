@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import com.amazonaws.services.rekognition.AmazonRekognition;
+import com.amazonaws.services.rekognition.model.Celebrity;
 import com.amazonaws.services.rekognition.model.CreateCollectionRequest;
 import com.amazonaws.services.rekognition.model.CreateCollectionResult;
 import com.amazonaws.services.rekognition.model.DeleteCollectionRequest;
@@ -25,6 +26,8 @@ import com.amazonaws.services.rekognition.model.IndexFacesResult;
 import com.amazonaws.services.rekognition.model.Label;
 import com.amazonaws.services.rekognition.model.ListCollectionsRequest;
 import com.amazonaws.services.rekognition.model.ListCollectionsResult;
+import com.amazonaws.services.rekognition.model.RecognizeCelebritiesRequest;
+import com.amazonaws.services.rekognition.model.RecognizeCelebritiesResult;
 import com.amazonaws.services.rekognition.model.SearchFacesByImageRequest;
 import com.amazonaws.services.rekognition.model.SearchFacesByImageResult;
 import com.recognizr.rekognition_aws.factory.ClientFactory;
@@ -115,37 +118,73 @@ public class RekognitionService {
 
 	public Map<String, String> searchIdentifyFace(String collectionName, byte[] bytes) {
 		HashMap<String, String> response = new HashMap<>();
+		try {
+			ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
 
+			AmazonRekognition rekognition = ClientFactory.createClient();
+			Image image = new Image().withBytes(byteBuffer);
+
+			SearchFacesByImageRequest request = new SearchFacesByImageRequest().withCollectionId(collectionName)
+					.withImage(image);
+			SearchFacesByImageResult result = rekognition.searchFacesByImage(request);
+			// debug code
+
+			List<FaceMatch> faceMatches = result.getFaceMatches();
+			for (FaceMatch match : faceMatches) {
+				Float similarity = match.getSimilarity();
+				Face face = match.getFace();
+				System.out.println("MATCH:" + "\nSimilarity: " + similarity + "\nFace-ID: " + face.getFaceId()
+						+ "\nImage ID: " + face.getImageId() + "\nExternal Image ID: " + face.getExternalImageId()
+						+ "\nConfidence: " + face.getConfidence());
+				response.put("person", face.getExternalImageId());
+				response.put("confidence", String.valueOf(similarity));
+
+				if (Float.compare(similarity, 87) >= 0) {
+					response.put("resp_code", "FR");
+				} // face recognised
+				else {
+					response.put("resp_code", "NR"); // not really recognised
+					
+				}
+
+			}
+			
+			// debug code ends
+			
+			if(response.isEmpty()||"NR".equals(response.get("resp_code"))) {
+				this.checkForCelebrities(bytes);
+			}
+			
+		} catch (Exception e) {
+			response.put("resp_code", "NF");
+
+		}
+		return response;
+	}
+
+	public void checkForCelebrities(byte[] bytes) {
 		ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
 
 		AmazonRekognition rekognition = ClientFactory.createClient();
-		Image image = new Image().withBytes(byteBuffer);
+		RecognizeCelebritiesRequest request = new RecognizeCelebritiesRequest()
+				.withImage(new Image().withBytes(byteBuffer));
 
-		SearchFacesByImageRequest request = new SearchFacesByImageRequest().withCollectionId(collectionName)
-				.withImage(image);
-		SearchFacesByImageResult result = rekognition.searchFacesByImage(request);
-		// debug code
-	
-		List<FaceMatch> faceMatches = result.getFaceMatches();
-		for (FaceMatch match : faceMatches) {
-			Float similarity = match.getSimilarity();
-			Face face = match.getFace();
-			System.out.println("MATCH:" + "\nSimilarity: " + similarity + "\nFace-ID: " + face.getFaceId()
-					+ "\nImage ID: " + face.getImageId() + "\nExternal Image ID: " + face.getExternalImageId()
-					+ "\nConfidence: " + face.getConfidence());
-			response.put("person", face.getExternalImageId());
-			response.put("confidence", String.valueOf(similarity));
-			
-			if(Float.compare(similarity, 87)>=0)
-				{response.put("resp_code", "FR");} //face recognised
-			else {
-				response.put("resp_code", "NR"); //not really recognised
+		RecognizeCelebritiesResult result = rekognition.recognizeCelebrities(request);
+
+		List<Celebrity> celebs = result.getCelebrityFaces();
+		System.out.println(celebs.size() + " celebrity(s) were recognized.\n");
+
+		for (Celebrity celebrity : celebs) {
+			System.out.println("Celebrity recognized: " + celebrity.getName());
+			System.out.println("Celebrity ID: " + celebrity.getId());
+
+			System.out.println("Further information (if available):");
+			for (String url : celebrity.getUrls()) {
+				System.out.println(url);
 			}
-			
+			System.out.println();
 		}
-		// debug code ends
-
-		return response;
+		System.out.println(result.getUnrecognizedFaces().size() + " face(s) were unrecognized.");
 	}
 
 	public Integer deleteCollection(String collectionName) {
