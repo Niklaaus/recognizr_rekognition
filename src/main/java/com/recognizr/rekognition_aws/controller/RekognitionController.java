@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -99,6 +100,7 @@ public class RekognitionController {
 	}
 
 	@PostMapping(value = "/recognize", produces = "application/json")
+    @CrossOrigin(origins = "https://recognizr.xyz")
 	public ResponseEntity searchFace(@RequestBody String base64InputImage) {
 		if (!StringUtils.isEmpty(base64InputImage)) {
 			int startOfBase64Data = base64InputImage.indexOf(",") + 1;
