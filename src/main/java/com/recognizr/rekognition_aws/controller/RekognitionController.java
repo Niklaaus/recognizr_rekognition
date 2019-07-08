@@ -18,13 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.recognizr.rekognition_aws.service.RekognitionService;
 
+@CrossOrigin( origins = "*" )
 @RestController
 public class RekognitionController {
 
 	@Autowired
 	RekognitionService rekogService;
 
-	final String collectionName = "engineer_sahab_faces_collection";
+	final String collectionName = "engineer_sahab_faces_collection_testing";
 	
 	@GetMapping(value = "/test", produces = "application/json")
 	public ResponseEntity testingRekognition() {

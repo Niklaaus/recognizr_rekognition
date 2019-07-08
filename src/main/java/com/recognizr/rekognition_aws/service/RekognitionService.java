@@ -117,7 +117,7 @@ public class RekognitionService {
 	}
 
 	public Map<String, String> searchIdentifyFace(String collectionName, byte[] bytes) {
-		HashMap<String, String> response = new HashMap<>();
+		Map<String, String> response = new HashMap<>();
 		try {
 			ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
 
@@ -127,34 +127,50 @@ public class RekognitionService {
 			SearchFacesByImageRequest request = new SearchFacesByImageRequest().withCollectionId(collectionName)
 					.withImage(image);
 			SearchFacesByImageResult result = rekognition.searchFacesByImage(request);
-			// debug code
 
 			List<FaceMatch> faceMatches = result.getFaceMatches();
-			for (FaceMatch match : faceMatches) {
-				Float similarity = match.getSimilarity();
-				Face face = match.getFace();
-				System.out.println("MATCH:" + "\nSimilarity: " + similarity + "\nFace-ID: " + face.getFaceId()
-						+ "\nImage ID: " + face.getImageId() + "\nExternal Image ID: " + face.getExternalImageId()
-						+ "\nConfidence: " + face.getConfidence());
-				response.put("person", face.getExternalImageId());
-				response.put("confidence", String.valueOf(similarity));
-
-				if (Float.compare(similarity, 87) >= 0) {
-					response.put("resp_code", "FR");
-				} // face recognised
-				else {
-					response.put("resp_code", "NR"); // not really recognised
-					
-				}
-
+			
+			if(!faceMatches.isEmpty()) {
+			FaceMatch match=faceMatches.get(0);//because only one face we are talking abt
+			Face face = match.getFace();
+			Float similarity = match.getSimilarity();
+			response.put("person", face.getExternalImageId());
+			response.put("confidence", String.valueOf(similarity));
+			
+			if (Float.compare(similarity, 87) >= 0) {
+				response.put("resp_code", "FR");
+			} else{
+				response.put("resp_code", "NR");
+			}// face recognised
 			}
 			
-			// debug code ends
-			
-			if(response.isEmpty()||"NR".equals(response.get("resp_code"))) {
-				this.checkForCelebrities(bytes);
+			if (StringUtils.isEmpty(response.get("resp_code"))) {
+				response.putAll(this.checkForCelebrities(bytes));
+				
 			}
 			
+			/*
+			 * for (FaceMatch match : faceMatches) { Float similarity =
+			 * match.getSimilarity(); Face face = match.getFace();
+			 * System.out.println("MATCH:" + "\nSimilarity: " + similarity + "\nFace-ID: " +
+			 * face.getFaceId() + "\nImage ID: " + face.getImageId() +
+			 * "\nExternal Image ID: " + face.getExternalImageId() + "\nConfidence: " +
+			 * face.getConfidence()); response.put("person", face.getExternalImageId());
+			 * response.put("confidence", String.valueOf(similarity));
+			 * 
+			 * if (Float.compare(similarity, 87) >= 0) { response.put("resp_code", "FR"); }
+			 * // face recognised else { response.put("resp_code", "NR");
+			 * 
+			 * response.putAll(this.checkForCelebrities(bytes));
+			 * 
+			 * if (StringUtils.isEmpty(response.get("resp_code"))) { // no celeb recognised
+			 * response.put("resp_code", "NR"); }
+			 * 
+			 * }
+			 * 
+			 * }
+			 */
+
 		} catch (Exception e) {
 			response.put("resp_code", "NF");
 
@@ -162,9 +178,9 @@ public class RekognitionService {
 		return response;
 	}
 
-	public void checkForCelebrities(byte[] bytes) {
+	public Map<String, String> checkForCelebrities(byte[] bytes) {
 		ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-
+		Map<String, String> response = new HashMap<>();
 		AmazonRekognition rekognition = ClientFactory.createClient();
 		RecognizeCelebritiesRequest request = new RecognizeCelebritiesRequest()
 				.withImage(new Image().withBytes(byteBuffer));
@@ -177,14 +193,18 @@ public class RekognitionService {
 		for (Celebrity celebrity : celebs) {
 			System.out.println("Celebrity recognized: " + celebrity.getName());
 			System.out.println("Celebrity ID: " + celebrity.getId());
+			response.put("person", celebrity.getName());
+			response.put("confidence", String.valueOf(celebrity.getMatchConfidence()));
+			if (Float.compare(celebrity.getMatchConfidence(), 87) >= 0) {
+				response.put("resp_code", "CelebFR");
+			} // celeb face recognised
+			else {
+				response.put("resp_code", "CelebNR"); // not really recognised
 
-			System.out.println("Further information (if available):");
-			for (String url : celebrity.getUrls()) {
-				System.out.println(url);
 			}
-			System.out.println();
 		}
 		System.out.println(result.getUnrecognizedFaces().size() + " face(s) were unrecognized.");
+		return response;
 	}
 
 	public Integer deleteCollection(String collectionName) {
